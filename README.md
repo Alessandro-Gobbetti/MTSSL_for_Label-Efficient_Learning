@@ -1,1 +1,1 @@
-# Multi-task_Self-Supervised_Methods_for_Label-Efficient_Learning
+# Multi-task Self-Supervised Methods for Label-Efficient Learning
