@@ -9,7 +9,7 @@ unzip -q UCI_HAR/UCI\ HAR\ Dataset.zip -d UCI_HAR
 # clean up
 rm uci_har.zip
 rm UCI_HAR/UCI\ HAR\ Dataset.zip
-rm -rf UCI_HAR/__MACOSX
+[ -d "UCI_HAR/__MACOSX" ] && rm -rf UCI_HAR/__MACOSX
 mv UCI_HAR/UCI\ HAR\ Dataset/* UCI_HAR/
 rm -rf UCI_HAR/UCI\ HAR\ Dataset
 
