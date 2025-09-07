@@ -6,11 +6,12 @@ import torch
 import numpy as np
 import pandas as pd
 from sklearn.metrics import f1_score
+from common.encoders import get_encoder_from_name
 from common.utils import set_seed
 import config as cfg
 from data_processing.HAR_split_data import load_UCIHAR_all
 from data_processing.HAR_precompute_augs import get_mtl_dataloader, aug_list
-from common.losses import print_downstream_epoch_summary, set_up_loss_functions, compute_multi_task_loss, print_epoch_summary
+from common.losses import print_simple_epoch_summary, set_up_loss_functions, compute_multi_task_loss, print_epoch_summary
 from common.models import Classifier, print_downstream_regime_summary, save_model, print_training_summary, load_encoder_from_epoch
 
 if __name__ == '__main__':
@@ -21,7 +22,12 @@ if __name__ == '__main__':
 
     # load the saved encoder
     # cfg.ENCODER_PATH
-    encoder = load_encoder_from_epoch('best', cfg)
+    if cfg.IS_FULLY_SUPERVISED:
+        # print a message
+        print("🔄  Using fully supervised training, training the full model.")
+        encoder = get_encoder_from_name(cfg)
+    else:
+        encoder = load_encoder_from_epoch('best', cfg)
 
     results = pd.DataFrame(columns=["n_act", "test_loss", "test_accuracy", "test_f1"])
 
@@ -35,13 +41,14 @@ if __name__ == '__main__':
             encoder=encoder,
             num_classes=cfg.UCIHAR_NUM_CLASSES
         )
+        if cfg.IS_FULLY_SUPERVISED:
+            # set the encoder to be trainable
+            for param in model_classifier.parameters():
+                param.requires_grad = True
         model_classifier.to(cfg.DEVICE)
 
         optimizer = torch.optim.Adam(model_classifier.parameters(), lr=cfg.LR)
         criterion = torch.nn.CrossEntropyLoss()
-
-
-        
 
         best_val_loss = float('inf')
         best_val_accuracy = 0.0
@@ -88,7 +95,7 @@ if __name__ == '__main__':
 
         # if cfg.VERBOSE:
         #     print_downstream_regime_summary(n_act, best_epoch, best_val_loss, best_val_accuracy, test_loss, test_accuracy, test_f1, cfg)
-        
+
         new_row = pd.DataFrame([{
             "n_act": n_act,
             "test_loss": test_loss,
