@@ -10,7 +10,6 @@ This repository contains the codebase for my Master's thesis on multi-task self-
 - Precomputed augmentations and masked inputs for fast multi-task training.
 - Centralized and federated training utilities and checkpoints for privacy-aware workflows.
 
-<!-- embed a diagram of the multi-task SSL framework -->
 ![Multi-task SSL Framework](resources/MTL-architecture.png)
 *Figure 1: Overview of the modular multi-task self-supervised learning (SSL) framework combining contrastive and pretext objectives with dynamic task weighting.*
 
@@ -81,27 +80,13 @@ IR experiments work in the same way:
 
 #### 2. Multi-Task Self-Supervised Learning produces compact and robust representations, even better than those obtained with expert knowledge
 
-<!-- add 4 images side by side -->
-<div style="display: flex; justify-content: space-between; gap: 0px; background: #fff">
-    <figure style="background: #fff;  margin: 0; padding: px; width: 25%; box-sizing: border-box; text-align: center;">
-        <img src="resources/tsne_all_activity_raw.png" alt="t-SNE Raw Signals" style="width: 100%; display: block;"/>
-        <figcaption style="color: gray; font-size: 0.95em; margin-top: 6px;">(a) Raw Data (1,161)</figcaption>
-    </figure>
-    <figure style="background: #fff; margin: 0; padding: 8px; width: 25%; box-sizing: border-box; text-align: center;">
-        <img src="resources/tsne_all_activity_features.png" alt="t-SNE Handcrafted Features" style="width: 100%; display: block;"/>
-        <figcaption style="color: gray; font-size: 0.95em; margin-top: 6px;">(b) Expert Features (561)</figcaption>
-    </figure>
-    <figure style="background: #fff; margin: 0; padding: 8px; width: 25%; box-sizing: border-box; text-align: center;">
-        <img src="resources/tsne_all_activity_embeddings.png" alt="t-SNE Learned Embeddings" style="width: 100%; display: block;"/>
-        <figcaption style="color: gray; font-size: 0.95em; margin-top: 6px;">(c) MTL Embeddings (128)</figcaption>
-    </figure>
-    <figure style="background: #fff; margin: 0; padding: 8px; width: 25%; box-sizing: border-box; text-align: center;">
-        <img src="resources/tsne_all_activity_legend.png" alt="t-SNE Legend" style="width: 100%; display: block;"/>
-        <figcaption style="color: gray; font-size: 0.95em; margin-top: 6px;"></figcaption>
-    </figure>
-</div>
-
-*The t-SNE visualizations of different data representations: raw signals, expert features, and MTL embeddings.*
+<p align="center">
+  <img src="resources/tsne_all_activity_raw.png" width="24%"/>
+  <img src="resources/tsne_all_activity_features.png" width="24%"/>
+  <img src="resources/tsne_all_activity_embeddings.png" width="24%"/>
+  <img src="resources/tsne_all_activity_legend.png" width="24%"/>
+</p>
+*The t-SNE visualizations of different data representations (each with a different size): raw signals (1,161), expert features (561), and MTL embeddings (128).*
 
 #### 3. Federated Learning with Multi-Task Self-Supervised Learning is possible
 ![Federated Learning](resources/FL.png)
