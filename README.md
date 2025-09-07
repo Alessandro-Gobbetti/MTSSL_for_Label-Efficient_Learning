@@ -1,6 +1,6 @@
 # Multi-task Self-Supervised Methods for Label-Efficient Learning
 
-This repository contains the codebase for my Master's thesis on multi-task self-supervised learning (SSL) methods for label-efficient learning (TODO: link to pdf). The goal is to leverage self-supervised learning combined with multi-task learning techniques to improve the efficiency and effectiveness of learning from limited labeled data.
+This repository contains the codebase for my Master's thesis on multi-task self-supervised learning (SSL) methods for label-efficient learning. The goal is to leverage self-supervised learning combined with multi-task learning techniques to improve the efficiency and effectiveness of learning from limited labeled data.
 
 ---
 
