@@ -86,6 +86,7 @@ IR experiments work in the same way:
   <img src="resources/tsne_all_activity_embeddings.png" width="24%"/>
   <img src="resources/tsne_all_activity_legend.png" width="24%"/>
 </p>
+
 *The t-SNE visualizations of different data representations (each with a different size): raw signals (1,161), expert features (561), and MTL embeddings (128).*
 
 #### 3. Federated Learning with Multi-Task Self-Supervised Learning is possible
