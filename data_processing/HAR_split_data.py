@@ -55,7 +55,6 @@ class dataset_features(Dataset):
         self.clients = clients
         if self.clients is not None:
             self.clients = self.clients.to_numpy().astype(np.int64)
-            print("\033[91mClients are provided in the dataset\033[0m")
     
     def __getitem__(self, index):
         sample, feature, target = self.samples[index], self.features[index], self.labels[index]
