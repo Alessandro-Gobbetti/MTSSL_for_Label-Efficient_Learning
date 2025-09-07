@@ -220,10 +220,14 @@ def compute_multi_task_loss(out_class, out_recon, out_contr1, out_contr2, out_fe
 
     return total, losses
 
-def print_downstream_epoch_summary(epoch, epoch_total, train_loss, train_accuracy, val_loss, val_accuracy):
-    print(f"{BOLD}{CYAN}📈 Epoch {epoch:03}/{epoch_total:03}{RESET} │ "
-          f"{GREEN}Train: {train_loss:7.4f}{RESET} (Acc: {train_accuracy*100:5.2f}%) │ "
-          f"{YELLOW}Val: {val_loss:7.4f}{RESET} (Acc: {val_accuracy*100:5.2f}%)")
+def print_simple_epoch_summary(epoch, epoch_total, train_loss, train_accuracy, val_loss, val_accuracy):
+    text = f"{BOLD}{CYAN}📈 Epoch {epoch:03}/{epoch_total:03}{RESET} │ {GREEN}Train: {train_loss:7.4f}{RESET}"
+    if train_accuracy:
+        text += f" (Acc: {train_accuracy*100:5.2f}%) │ "
+    text += f"{YELLOW}Val: {val_loss:7.4f}{RESET}"
+    if val_accuracy:
+        text += f" (Acc: {val_accuracy*100:5.2f}%)"
+    print(text)
 
 def print_epoch_summary(epoch, train_metrics, val_metrics, a_dict, cfg):   
     

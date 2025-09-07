@@ -8,7 +8,8 @@ from common.losses import compute_multi_task_loss
 from data_processing.HAR_precompute_augs import aug_list
 from sklearn.metrics import f1_score
 
-
+###########################################################################################################################
+# Human Activity Recognition (HAR)
 
 class Classifier(torch.nn.Module):
     """
@@ -213,7 +214,7 @@ class MultiTaskModel(nn.Module):
 
         return outputs
 
-    def run_epoch(self, dataloader, optimizer, a_dict, cfg, criterion_classification, criterion_reconstruction, criterion_contrastive, criterion_features, is_training=True):
+    def run_epoch(self, dataloader, optimizer, a_dict, cfg, criterion_classification, criterion_reconstruction, criterion_contrastive, criterion_features, is_training=True, disable_tqdm=None):
         """
         Run a single epoch for training or validation.
 
@@ -244,6 +245,9 @@ class MultiTaskModel(nn.Module):
         loss_features = 0.0
         num_batches = 0
 
+        if disable_tqdm is None:
+            disable_tqdm = not cfg.VERBOSE
+
         # Use torch.no_grad() for validation
         context = torch.enable_grad() if is_training else torch.no_grad()
 
@@ -253,7 +257,7 @@ class MultiTaskModel(nn.Module):
                 total=len(dataloader),
                 desc=f"{'Training' if is_training else 'Validation'} Epoch",
                 leave=False,
-                disable=not cfg.VERBOSE,
+                disable=disable_tqdm,
             ):
                 orig = orig.squeeze(0).to(torch.float32).to(cfg.DEVICE)
                 masked = masked.squeeze(0).to(torch.float32).to(cfg.DEVICE)
@@ -307,20 +311,6 @@ class MultiTaskModel(nn.Module):
 
         return total_loss, loss_class, loss_recon, loss_contrastive, loss_features
 
-
-def save_model(model, epoch, cfg):
-    import os
-    import torch
-    # check if epoch is a number
-    save_dir = os.path.join(cfg.MODELS_DIR, cfg.EXPERIMENT_NAME)
-    os.makedirs(save_dir, exist_ok=True)
-    if isinstance(epoch, int):
-        save_path = os.path.join(save_dir, f"{cfg.EXPERIMENT_NAME}_epoch_{epoch+1:03}.pth")
-    else:
-        save_path = os.path.join(save_dir, f"{cfg.EXPERIMENT_NAME}_best.pth")
-    torch.save(model.state_dict(), save_path)
-    # print(f"Model saved to {save_path}")
-
 def load_encoder_from_epoch(epoch, cfg):
     import os
     import torch
@@ -348,6 +338,249 @@ def load_encoder_from_epoch(epoch, cfg):
     model_multitask.to(cfg.DEVICE)
     model_multitask.eval()
     return model_multitask.encoder
+
+###########################################################################################################################
+# Image Reconstruction (IR)
+
+class IR_Classifier(torch.nn.Module):
+    def __init__(self, encoder, num_classes=10):
+        super(IR_Classifier, self).__init__()
+        self.encoder = encoder
+
+        # Forward pass through the base model to get the output dimension
+        dummy_input = torch.randn(1, 3, 96, 96).to(next(self.encoder.parameters()).device)
+        with torch.no_grad():
+            features = self.encoder(dummy_input)
+        output_dim = features.shape[1] if isinstance(features, torch.Tensor) else features[0].shape[1]
+        print("Output dimension of the base model:", output_dim)
+        self.fc = nn.Sequential(
+            nn.Linear(output_dim, num_classes)
+        )
+
+        # freeze the encoder parameters
+        for param in self.encoder.parameters():
+            param.requires_grad = False
+
+    def forward(self, x):
+        features = self.encoder(x)
+        logits = self.fc(features)
+        return logits
+    
+    def run_epoch(self, loader, criterion, optimizer=None, device="cpu", is_training=True):
+        if is_training:
+            self.train()
+        else:
+            self.eval()
+
+        total_loss = 0.0
+        correct = 0
+        total = 0
+        all_labels = []
+        all_predictions = []
+
+        # Use torch.no_grad() for evaluation
+        context = torch.enable_grad() if is_training else torch.no_grad()
+
+        with context:
+            for batch in loader:
+                inputs, labels = batch
+                inputs, labels = inputs.to(device), labels.to(device)
+
+                if is_training:
+                    optimizer.zero_grad()
+
+                outputs = self(inputs)
+                loss = criterion(outputs, labels)
+
+                if is_training:
+                    loss.backward()
+                    optimizer.step()
+
+                total_loss += loss.item() * inputs.size(0)
+                _, predicted = torch.max(outputs.data, 1)
+                total += labels.size(0)
+                correct += (predicted == labels).sum().item()
+
+                all_labels.extend(labels.cpu().numpy())
+                all_predictions.extend(predicted.cpu().numpy())
+
+        avg_loss = total_loss / len(loader.dataset)
+        accuracy = correct / total
+        # Compute F1 score if needed
+        f1 = f1_score(all_labels, all_predictions, average='macro')
+
+        return avg_loss, accuracy, f1
+    
+class MultiTaskIR(torch.nn.Module):
+    def __init__(self, is_contrastive, is_rotation, is_mask, hidden_dim=128):
+        super(MultiTaskIR, self).__init__()
+        import torchvision
+
+        self.is_contrastive = is_contrastive
+        self.is_rotation = is_rotation
+        self.is_mask = is_mask
+        
+        # encoder
+        self.encoder = torchvision.models.resnet18(num_classes=4*hidden_dim)
+        # remove the last resnet layer (fc)
+        last_layer = self.encoder.fc
+        self.encoder.fc = nn.Identity()
+
+
+        if self.is_contrastive:
+            self.contrastive_head = nn.Sequential(
+                last_layer,  # Linear(ResNet output, 4*hidden_dim)
+                nn.ReLU(inplace=True),
+                nn.Linear(4*hidden_dim, hidden_dim)
+            )
+        
+        if self.is_rotation:
+            self.rotation_head = nn.Sequential(
+                last_layer,  # Linear(ResNet output, 4*hidden_dim)
+                nn.Linear(4*hidden_dim, hidden_dim),
+                nn.ReLU(inplace=True),
+                nn.Linear(hidden_dim, 4),
+                nn.Softmax(dim=1)
+            )
+
+        if self.is_mask:
+            self.mask_projection = nn.Sequential(
+                nn.Linear(last_layer.in_features, 512 * 3 * 3),
+            )
+            self.decoder = nn.Sequential(
+                nn.ConvTranspose2d(512, 256, 4, 2, 1),
+                nn.BatchNorm2d(256),
+                nn.ReLU(inplace=True),
+
+                nn.ConvTranspose2d(256, 128, 4, 2, 1),
+                nn.BatchNorm2d(128),
+                nn.ReLU(inplace=True),
+
+                nn.ConvTranspose2d(128, 64, 4, 2, 1),
+                nn.BatchNorm2d(64),
+                nn.ReLU(inplace=True),
+
+                nn.ConvTranspose2d(64, 32, 4, 2, 1),
+                nn.BatchNorm2d(32),
+                nn.ReLU(inplace=True),
+
+                nn.ConvTranspose2d(32, 3, 4, 2, 1),
+                nn.Tanh()
+            )
+    def forward(self, x1, x2, x_rot, x_mask):
+        z1, z2, z_rot, z_recon = None, None, None, None
+        if self.is_contrastive:
+            z1 = self.encoder(x1)
+            z1 = self.contrastive_head(z1)
+            z2 = self.encoder(x2)
+            z2 = self.contrastive_head(z2)
+        if self.is_rotation:
+            z_rot = self.encoder(x_rot)
+            z_rot = self.rotation_head(z_rot)
+        if self.is_mask:
+            z_mask = self.encoder(x_mask)
+            z_mask = self.mask_projection(z_mask)
+            z_mask = z_mask.view(z_mask.size(0), 512, 3, 3)
+            z_recon = self.decoder(z_mask)
+        return z1, z2, z_rot, z_recon
+
+    def run_epoch(self, dataloader, optimizer, a_dict, cfg, criterion_contr, criterion_rot, criterion_mask, is_training=True, disable_tqdm=None):
+        
+        if is_training:
+            self.train()
+        else:
+            self.eval()
+
+        total_loss = 0.0
+        loss_contr = 0.0
+        loss_rot = 0.0
+        loss_mask = 0.0
+        num_batches = 0
+
+        if disable_tqdm is None:
+            disable_tqdm = not cfg.VERBOSE
+
+        # Use torch.no_grad() for validation
+        context = torch.enable_grad() if is_training else torch.no_grad()
+
+        with context:
+            for batch in  tqdm(
+                dataloader,
+                total=len(dataloader),
+                desc=f"{'Training' if is_training else 'Validation'} Epoch",
+                leave=False,
+                disable=disable_tqdm,
+                ):
+
+                x1, x2, x_rot, rot_label, x_mask, x_original = batch[0]
+
+                if self.is_contrastive:
+                    x1 = x1.to(dtype=torch.float32, device=cfg.DEVICE)
+                    x2 = x2.to(dtype=torch.float32, device=cfg.DEVICE)
+                if self.is_rotation:
+                    x_rot = x_rot.to(dtype=torch.float32, device=cfg.DEVICE)
+                    rot_label = rot_label.to(dtype=torch.long, device=cfg.DEVICE)
+                if self.is_mask:
+                    x_mask = x_mask.to(dtype=torch.float32, device=cfg.DEVICE)
+                    x_original = x_original.to(dtype=torch.float32, device=cfg.DEVICE)
+
+                if is_training:
+                    optimizer.zero_grad()
+
+                z1, z2, z_rot, z_recon = self(x1, x2, x_rot, x_mask)
+
+                if self.is_contrastive and z1 is not None and z2 is not None:
+                    loss_contr = criterion_contr(z1, z2)
+                if self.is_rotation and z_rot is not None:
+                    loss_rot = criterion_rot(z_rot, rot_label)
+                if self.is_mask and z_recon is not None:
+                    loss_mask = criterion_mask(z_recon, x_original)
+
+                cfg.AUXTASKWEIGHT = 0.3
+                # weight losses
+                if sum([self.is_contrastive, self.is_rotation, self.is_mask]) > 1:
+                    losses=[]
+                    if self.is_contrastive:
+                        loss_contr = (1 / (2 * a_dict['a1']**2)) * loss_contr + torch.log(a_dict['a1'])
+                        losses.append(loss_contr)
+                    if self.is_rotation:
+                        loss_rot = cfg.AUXTASKWEIGHT * (1 / (2 * a_dict['a2']**2)) * loss_rot + torch.log(a_dict['a2'])
+                        losses.append(loss_rot)
+                    if self.is_mask:
+                        loss_mask = cfg.AUXTASKWEIGHT * (1 / (2 * a_dict['a3']**2)) * loss_mask + torch.log(a_dict['a3'])
+                        losses.append(loss_mask)
+                    
+                    loss = sum(losses)
+                else:
+                    # only one task is active
+                    loss = loss_contr if self.is_contrastive else loss_rot if self.is_rotation else loss_mask
+
+                if is_training:
+                    loss.backward()
+                    optimizer.step()
+
+                total_loss += loss.item()
+                num_batches += 1
+
+        return total_loss / num_batches if num_batches > 0 else 0.0
+
+###########################################################################################################################
+# common
+
+def save_model(model, epoch, cfg):
+    import os
+    import torch
+    # check if epoch is a number
+    save_dir = os.path.join(cfg.MODELS_DIR, cfg.EXPERIMENT_NAME)
+    os.makedirs(save_dir, exist_ok=True)
+    if isinstance(epoch, int):
+        save_path = os.path.join(save_dir, f"{cfg.EXPERIMENT_NAME}_epoch_{epoch+1:03}.pth")
+    else:
+        save_path = os.path.join(save_dir, f"{cfg.EXPERIMENT_NAME}_best.pth")
+    torch.save(model.state_dict(), save_path)
+    # print(f"Model saved to {save_path}")
+
+
 
 def print_training_summary(best_epoch, best_val_loss, cfg):
     """
