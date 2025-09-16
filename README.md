@@ -94,6 +94,11 @@ IR experiments work in the same way:
 *When trained in a federated setting, Multi-Task Self-Supervised Learning can still achieve competitive performance compared to centralized training. This allows for the utilization of massive decentralized data sources to create robust models while preserving data privacy and security.*
 
 ---
+### 📄 Thesis documents
+- Thesis manuscript (PDF): [docs/thesis/thesis.pdf](docs/thesis/thesis.pdf)
+- Presentation slides (PDF): [docs/thesis/presentation.pdf](docs/thesis/presentation.pdf)
+
+---
 
 ### 🧾 License & citation
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
